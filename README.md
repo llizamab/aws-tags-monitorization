@@ -6,7 +6,7 @@ This project use AWS CostExplorer csv reports to extract untagged resources.  Us
 
 The architecture diagram is:
 
-![alt text](https://github.com/llizamab/aws-tags-monitorization/blob/master/architecture.jpg?raw=true)
+![Image arch](https://github.com/llizamab/aws-tags-monitorization/blob/master/architecture.png?raw=true)
 
 
 AWS have an API called [resourcegroupstaggingapi](https://docs.aws.amazon.com/cli/latest/reference/resourcegroupstaggingapi/get-resources.html) 

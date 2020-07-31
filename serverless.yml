@@ -1,0 +1,134 @@
+service: tags-monitorization
+
+provider:
+  name: aws
+  runtime: python3.8
+  region: ${opt:region, 'us-east-1'}
+  stage: ${self:custom.currentStage}
+  stackTags:
+    app: "tags-monitorization"
+    environment: "Producción"
+    project: "tags-monitorization"
+
+plugins:
+  - serverless-python-requirements
+custom:
+  currentStage: ${opt:stage, 'dev'}
+  notificationEmail: "testuser1@domaintest.com,testuser2@domaintest.com"
+  senderEmail: "noreply@domaintest.com"
+  subject: "Untagged resources Apside report"
+  bucketName: "tags-monitorization-bucket"
+  reportCron: "cron(0 13 ? * MON,WED *)"
+  customTags: "app,environment,project"
+  pythonRequirements:
+    dockerizePip: true
+
+functions:
+  extractor:
+    handler: handler.monitorization
+    environment:
+      S3_BUCKET: !Ref costsS3Bucket
+      SENDER: ${self:custom.senderEmail}
+      RECIPIENT: ${self:custom.notificationEmail}
+      SUBJECT: ${self:custom.subject}
+      BODY_TEXT: ${file(./emailText.txt)}
+      BODY_HTML: ${file(./emailHtml.html)}
+      TAGS: ${self:custom.customTags}
+    events:
+    - schedule:
+        name: tagsMonitorizationCronRule
+        rate: ${self:custom.reportCron}
+        enabled: true
+    role: lambdaBucketRole
+
+resources:
+  Resources:
+    costsS3Bucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.bucketName}
+        LifecycleConfiguration:
+          Rules:
+            - Id: "${self:custom.bucketName}-ExpirationRule"
+              ExpirationInDays: 180
+              Status: 'Enabled'
+              Prefix: ''
+              Transitions: 
+                - TransitionInDays: 31
+                  StorageClass: 'ONEZONE_IA'
+
+        CorsConfiguration:
+          CorsRules:
+            - AllowedOrigins:
+                - '*'
+              AllowedHeaders:
+                - '*'
+              AllowedMethods:
+                - GET
+                - PUT
+                - POST
+                - DELETE
+                - HEAD
+              MaxAge: 3000
+
+    lambdaBucketRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: lambdaBucketTagsMonitorizationRole
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: lambdaBucketTagsMonitorizationPolicy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                  Resource:
+                    - 'Fn::Join':
+                      - ':'
+                      - - 'arn:aws:logs'
+                        - Ref: 'AWS::Region'
+                        - Ref: 'AWS::AccountId'
+                        - 'log-group:/aws/lambda/*:*:*'
+                - Effect: Allow
+                  Action:
+                    - "s3:PutObject"
+                    - "s3:GetObject"
+                  Resource:
+                    Fn::Join:
+                      - ""
+                      - - "arn:aws:s3:::"
+                        - "Ref" : "costsS3Bucket"
+                        - "/*"
+                - Effect: Allow
+                  Action:
+                    - "s3:ListBucket"
+                  Resource:
+                    Fn::Join:
+                      - ""
+                      - - "arn:aws:s3:::"
+                        - "Ref" : "costsS3Bucket"
+                - Effect: Allow
+                  Action:
+                    - "SES:SendEmail"
+                    - "SES:SendRawEmail"
+                  Resource:
+                    Fn::Join:
+                      - ':'
+                      - - 'arn:aws:ses'
+                        - Ref: 'AWS::Region'
+                        - Ref: 'AWS::AccountId'
+                        - 'identity/${self:custom.senderEmail}'
+
+
+

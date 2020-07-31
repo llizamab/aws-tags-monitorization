@@ -1,0 +1,1 @@
+Reporte de recursos sin TAGs en AWS Apside. Favor revisar csv adjunto.
